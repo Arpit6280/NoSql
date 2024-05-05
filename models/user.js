@@ -20,11 +20,18 @@ class User {
   }
   addToCart(product) {
     console.log(product);
-    const cartProductIndex = this.cart.items.findIndex((cp) => {
-      return cp.productId.toString() === product._id.toString();
-    });
+
+    let cartProductIndex = -1;
+    if (this.cart.items !== undefined) {
+      cartProductIndex = this.cart.items.findIndex((cp) => {
+        return cp.productId.toString() === product._id.toString();
+      });
+    }
     let newQuantity = 1;
-    const updatedCartItems = [...this.cart.items];
+    let updatedCartItems = [];
+    if (this.cart.items !== undefined) {
+      updatedCartItems = [...this.cart.items];
+    }
     if (cartProductIndex >= 0) {
       newQuantity = this.cart.items[cartProductIndex].quantity + 1;
       updatedCartItems[cartProductIndex].quantity = newQuantity;
@@ -49,9 +56,13 @@ class User {
 
   getCart() {
     const db = getDb();
-    const productIds = this.cart.items.map((i) => {
-      return i.productId;
-    });
+    let productIds = [];
+    if (this.cart.items !== undefined) {
+      productIds = this.cart.items.map((i) => {
+        return i.productId;
+      });
+    }
+
     return db
       .collection("products")
       .find({ _id: { $in: productIds } })
@@ -80,6 +91,37 @@ class User {
         $set: { cart: { items: updatedCartItems } },
       }
     );
+  }
+
+  addOrder() {
+    const db = getDb();
+    return this.getCart()
+      .then((products) => {
+        const order = {
+          items: products,
+          user: {
+            _id: new ObjectId(this._id),
+            name: this.name,
+          },
+        };
+        return db.collection("orders").insertOne(order);
+      })
+      .then((result) => {
+        this.cart = { items: [] };
+        return db
+          .collection("users")
+          .updateOne(
+            { _id: new ObjectId(this._id) },
+            { $set: { cart: { items: [] } } }
+          );
+      });
+  }
+  getOrders() {
+    const db = getDb();
+    return db
+      .collection("orders")
+      .find({ "user._id": new ObjectId(this._id) })
+      .toArray();
   }
   static findUserById(userId) {
     const db = getDb();
